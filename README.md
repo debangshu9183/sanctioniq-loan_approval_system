@@ -93,7 +93,7 @@ cp /path/to/rf_regressor_pipeline.pkl  models/
 streamlit run app.py
 ```
 
-Open [http://localhost:8501](http://localhost:8501) in your browser.
+Open [https://sanctioniq-loanapprovalsystem-ndikn7eiplgex92sdvuvhv.streamlit.app/) in your browser.
 
 ---
 
