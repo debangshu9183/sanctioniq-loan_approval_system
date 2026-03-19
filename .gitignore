@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+loan_analysis/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Models (large files — store separately)
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.pth
+
+# Data
+*.csv
+*.xlsx
+*.parquet
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Logs
+*.log
+logs/
+
+# Build / dist
+dist/
+build/
+*.egg-info/
+
+# Vercel
+.vercel/
