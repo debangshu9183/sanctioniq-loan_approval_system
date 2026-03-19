@@ -1,11 +1,19 @@
-# Loan Approval Predictor
+# ◈ LoanIQ — Loan Approval Engine
 
-A two-stage ML pipeline deployed as a FastAPI web application.
+A two-stage Machine Learning pipeline wrapped in a polished **Streamlit** web UI that predicts loan approval and estimates the sanctioned amount for approved applications.
 
-| Stage | Model | Input | Output |
-|-------|-------|-------|--------|
-| 1 | Random Forest Classifier | Applicant features | Approved / Rejected + probability |
-| 2 | Random Forest Regressor | Approved applicant features | Predicted sanctioned loan amount |
+---
+
+## How It Works
+
+The prediction runs in two sequential stages:
+
+| Stage | Model | Task | Output |
+|-------|-------|------|--------|
+| 1 | Random Forest Classifier | Should the loan be approved? | Approved / Rejected + confidence % |
+| 2 | Random Forest Regressor | How much will be sanctioned? | Predicted loan amount (₹) |
+
+Stage 2 only runs when Stage 1 predicts **Approved**. Both models are pre-trained `scikit-learn` pipelines loaded from `.pkl` files.
 
 ---
 
@@ -13,125 +21,178 @@ A two-stage ML pipeline deployed as a FastAPI web application.
 
 ```
 loan-approval-app/
-├── api/
-│   └── index.py            ← FastAPI app (Vercel entry point)
-├── src/
-│   ├── config.py           ← All constants & column names
-│   ├── schemas.py          ← Pydantic request/response models
-│   ├── model_loader.py     ← Singleton pkl loader with caching
-│   └── predictor.py        ← Two-stage prediction logic
-├── static/
-│   └── index.html          ← Single-page frontend UI
-├── models/                 ← ⚠️  Place your .pkl files here (see below)
-│   ├── rf_classifier_pipeline.pkl
-│   └── rf_regressor_pipeline.pkl
-├── requirements.txt
-├── vercel.json
-└── README.md
+├── app.py                          ← Streamlit UI + prediction logic
+├── main.py                         ← CLI entry point (for quick testing)
+├── config.yaml                     ← Model paths & default input values
+├── models/
+│   ├── rf_classifier_pipeline.pkl  ← Stage 1: approval classifier
+│   └── rf_regressor_pipeline.pkl   ← Stage 2: amount regressor
+└── requirements.txt
 ```
 
 ---
 
-## Local Development
+## Input Features
+
+| Feature | Type | Description |
+|---------|------|-------------|
+| `no_of_dependents` | Integer | Number of financial dependents |
+| `education` | Categorical | `Graduate` / `Not Graduate` |
+| `self_employed` | Categorical | `Yes` / `No` |
+| `income_annum` | Float | Annual income (₹) |
+| `loan_amount` | Float | Requested loan amount (₹) |
+| `loan_term` | Integer | Repayment period (years) |
+| `cibil_score` | Integer | Credit score (300–950) |
+| `residential_assets_value` | Float | Value of residential property (₹) |
+| `commercial_assets_value` | Float | Value of commercial property (₹) |
+| `luxury_assets_value` | Float | Value of luxury assets (₹) |
+| `bank_asset_value` | Float | Bank / liquid assets (₹) |
+
+The UI also computes and displays three derived indicators in real-time:
+- **Total Assets** — sum of all four asset fields
+- **Loan-to-Asset (LTV) Ratio** — `loan_amount / total_assets`
+- **Income Multiple** — `loan_amount / income_annum`
+
+---
+
+## Local Setup
+
+### 1. Clone / unzip the project
 
 ```bash
-# 1. Clone / unzip the project
 cd loan-approval-app
+```
 
-# 2. Create virtual environment
+### 2. Create a virtual environment
+
+```bash
 python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+```
 
-# 3. Install dependencies
+### 3. Install dependencies
+
+```bash
 pip install -r requirements.txt
+```
 
-# 4. Copy your model files into models/
+### 4. Place model files
+
+Copy your trained pipeline files into the `models/` directory:
+
+```bash
 cp /path/to/rf_classifier_pipeline.pkl models/
 cp /path/to/rf_regressor_pipeline.pkl  models/
-
-# 5. Run locally
-uvicorn api.index:app --reload --port 8000
 ```
 
-Open http://localhost:8000 in your browser.
+> **Note:** The paths in `config.yaml` are currently set to absolute Windows paths. Update them to point to your local `models/` directory, or simply ensure the files are at `models/rf_classifier_pipeline.pkl` and `models/rf_regressor_pipeline.pkl` relative to the project root (the `app.py` uses `Path(__file__).parent / "models"` which handles this automatically).
+
+### 5. Launch the app
+
+```bash
+streamlit run app.py
+```
+
+Open [http://localhost:8501](http://localhost:8501) in your browser.
 
 ---
 
-## Deploy to Vercel
+## CLI Usage
 
-### Prerequisites
-- [Vercel CLI](https://vercel.com/docs/cli): `npm i -g vercel`
-- Vercel account (free tier works)
-
-### Steps
+A minimal command-line interface is available in `main.py` for quick testing without the UI:
 
 ```bash
-# 1. Login
-vercel login
-
-# 2. Deploy (from project root)
-vercel --prod
+python main.py
 ```
 
-### ⚠️  Model File Size Warning
+It prompts for the number of dependents and runs a prediction with the remaining fields set to defaults from `config.yaml`.
 
-Vercel's Python serverless functions have a **50 MB compressed** limit.
-The included models are:
-- `rf_classifier_pipeline.pkl` ≈ 4.3 MB
-- `rf_regressor_pipeline.pkl`  ≈ 11.6 MB
+---
 
-With `scikit-learn + numpy + pandas`, the total bundle approaches the limit.
+## Configuration (`config.yaml`)
 
-**If deployment fails due to size:**
-Option A — Upload models to **AWS S3 / Google Cloud Storage** and fetch them
-at startup via `boto3` / `google-cloud-storage`.
+```yaml
+models:
+  classifier: models/rf_classifier_pipeline.pkl
+  regressor:  models/rf_regressor_pipeline.pkl
 
-Option B — Deploy to **Railway or Render** (no bundle size limit):
-```bash
-# Railway
-railway init && railway up
-
-# Render — connect your GitHub repo and set:
-# Build Command:  pip install -r requirements.txt
-# Start Command:  uvicorn api.index:app --host 0.0.0.0 --port $PORT
+ui:
+  default_inputs:
+    no_of_dependents: 1
+    education: Graduate
+    self_employed: No
+    income_annum: 1200000
+    loan_amount: 30000
+    loan_term: 12
+    cibil_score: 800
+    residential_assets_value: 2000000
+    commercial_assets_value: 2000000
+    luxury_assets_value: 0
+    bank_asset_value: 55000
 ```
 
 ---
 
-## API Reference
+## Dependencies
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET`  | `/`         | Frontend UI |
-| `GET`  | `/health`   | Service health check |
-| `POST` | `/api/predict` | Run two-stage prediction |
-| `GET`  | `/docs`     | Interactive Swagger UI |
+| Package | Version |
+|---------|---------|
+| `streamlit` | 1.55.0 |
+| `pandas` | 2.2.2 |
+| `numpy` | 1.26.4 |
+| `scikit-learn` | 1.4.2 |
+| `joblib` | 1.4.2 |
 
-### POST `/api/predict` — Request Body
+Install all at once:
 
-```json
-{
-  "no_of_dependents": 2,
-  "education": "Graduate",
-  "self_employed": "No",
-  "income_annum": 9600000,
-  "loan_amount": 29900000,
-  "loan_term": 12,
-  "cibil_score": 778,
-  "residential_assets_value": 2400000,
-  "commercial_assets_value": 17600000,
-  "luxury_assets_value": 22700000,
-  "bank_asset_value": 8000000
-}
+```bash
+pip install -r requirements.txt
 ```
 
-### Response
+---
 
-```json
-{
-  "approved": true,
-  "approval_probability": 0.97,
-  "predicted_loan_amount": 28541234.0,
-  "message": "Congratulations! Your loan application is likely to be approved. Estimated sanctioned amount: ₹28,541,234."
-}
+## UI Features
+
+- **Live credit score gauge** — colour-coded bar (Poor / Fair / Excellent) that updates as you move the CIBIL slider
+- **Real-time financial summary** — total assets, LTV ratio, and income multiple update instantly as you enter values
+- **Rejection tips** — if the application is rejected, the panel surfaces specific improvement areas (e.g. low CIBIL, high LTV, high income multiple)
+- **Confidence bar** — visual display of the classifier's approval probability
+
+---
+
+## Deployment
+
+The app can be deployed to any platform that supports Python and Streamlit.
+
+### Streamlit Community Cloud (recommended for quick sharing)
+
+1. Push the project to a public GitHub repository (exclude `.pkl` files if they are large — use Git LFS or host them externally)
+2. Go to [share.streamlit.io](https://share.streamlit.io) and connect your repo
+3. Set the main file path to `app.py`
+
+### Railway / Render
+
+```bash
+# Start command
+streamlit run app.py --server.port $PORT --server.address 0.0.0.0
 ```
+
+### Docker
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY . .
+RUN pip install -r requirements.txt
+EXPOSE 8501
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+```
+
+---
+
+## Model Notes
+
+- Both pipelines are `scikit-learn` `Pipeline` objects that include their own preprocessing steps, so raw input DataFrames can be passed directly.
+- The classifier uses `predict_proba` and applies a 0.5 threshold for the approval decision.
+- The regressor receives the same feature set as the classifier, with `loan_amount` replaced by `loan_status = "approved"` as an additional column.
+- Models are loaded once at startup via `@st.cache_resource` to avoid reloading on every interaction.
